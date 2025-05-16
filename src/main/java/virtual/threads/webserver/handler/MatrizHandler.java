@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,6 +25,13 @@ public class MatrizHandler implements RequestHandler {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
+    // Matrizes fixas geradas uma vez
+    private static final int[][] pequenaA = gerarMatrizFixa(1);
+    private static final int[][] pequenaB = gerarMatrizFixa(1);
+    private static final int[][] mediaA = gerarMatrizFixa(100);
+    private static final int[][] mediaB = gerarMatrizFixa(100);
+    private static final int[][] grandeA = gerarMatrizFixa(500);
+    private static final int[][] grandeB = gerarMatrizFixa(500);
 
     @Override
     public boolean canHandle(Request request) {
@@ -43,9 +49,25 @@ public class MatrizHandler implements RequestHandler {
             int tamanho = Integer.parseInt(params.get("tamanho"));
             int threads = Integer.parseInt(params.get("threads"));
 
-            // Gerar matrizes
-            int[][] matrizA = gerarMatrizAleatoria(tamanho);
-            int[][] matrizB = gerarMatrizAleatoria(tamanho);
+            int[][] matrizA;
+            int[][] matrizB;
+
+            switch (tamanho) {
+                case 1 -> {
+                    matrizA = pequenaA;
+                    matrizB = pequenaB;
+                }
+                case 100 -> {
+                    matrizA = mediaA;
+                    matrizB = mediaB;
+                }
+                case 500 -> {
+                    matrizA = grandeA;
+                    matrizB = grandeB;
+                }
+                default -> throw new IllegalArgumentException("Tamanho inválido: " + tamanho);
+            }
+
 
             // Multiplicar as matrizes (processamento concorrente)
             int[][] matrizFinal = multiplicarMatrizes(matrizA, matrizB, threads);
@@ -61,16 +83,18 @@ public class MatrizHandler implements RequestHandler {
     }
 
     /**
-     * Gera uma matriz aleatória de inteiros.
+     * Gera uma matriz fixa de inteiros.
      *
      * @param tamanho Tamanho da matriz (número de linhas e colunas)
      * @return Matriz gerada aleatoriamente
      */
-    private int[][] gerarMatrizAleatoria(int tamanho) {
+    private static int[][] gerarMatrizFixa(int tamanho) {
         int[][] matriz = new int[tamanho][tamanho];
+        int valor = 0;
         for (int i = 0; i < tamanho; i++) {
             for (int j = 0; j < tamanho; j++) {
-                matriz[i][j] = 1; // Preenche com valor fixo 1 -- TODO Provávelmente vamos alterar a lógica aqui.
+                matriz[i][j] = valor++;
+                if (valor > 100) valor = 0;
             }
         }
         return matriz;
@@ -87,28 +111,26 @@ public class MatrizHandler implements RequestHandler {
         int tamanho = matrizA.length;
         int[][] resultado = new int[tamanho][tamanho];
 
-        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-
-        for (int t = 0; t < threads; t++) {
-            final int threadId = t;
-            executor.submit(() -> {
-                for (int i = threadId; i < tamanho; i += threads) {
-                    for (int j = 0; j < tamanho; j++) {
-                        int soma = 0;
-                        for (int k = 0; k < tamanho; k++) {
-                            soma += matrizA[i][k] * matrizB[k][j];
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int t = 0; t < threads; t++) {
+                final int threadId = t;
+                executor.submit(() -> {
+                    for (int i = threadId; i < tamanho; i += threads) {
+                        for (int j = 0; j < tamanho; j++) {
+                            int soma = 0;
+                            for (int k = 0; k < tamanho; k++) {
+                                soma += matrizA[i][k] * matrizB[k][j];
+                            }
+                            resultado[i][j] = soma;
                         }
-                        resultado[i][j] = soma;
                     }
-                }
-            });
+                });
+            }
+            // Nenhum shutdown() ou awaitTermination() necessário
         }
-
-        executor.shutdown();
-        executor.awaitTermination(1, TimeUnit.MINUTES);
-
         return resultado;
     }
+
 
     private String converteMatrizToJSON(int[][] matriz) {
 
