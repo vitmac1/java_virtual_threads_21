@@ -1,21 +1,20 @@
 package virtual.threads.webserver.matriz;
 
+import lombok.Getter;
+
 import java.util.stream.Stream;
 
+@Getter
 public enum MatrizEnum {
 
-    PEQUENA(100),
-    MEDIA(500),
-    GRANDE(1000);
+    PEQUENA(1000),
+    MEDIA(2000),
+    GRANDE(3000);
 
     private final int tamanho;
 
     MatrizEnum(int tamanho) {
         this.tamanho = tamanho;
-    }
-
-    public int getTamanho() {
-        return tamanho;
     }
 
     public static MatrizEnum getEnum(int tamanho) {
